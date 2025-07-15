@@ -1,11 +1,13 @@
 import asyncHandler from "express-async-handler"
-import { Request,Response } from "express"
+import { NextFunction, Request,Response } from "express"
 import User, {IUser} from "../model/userModel"
 import Student from "../model/studentProfile"
 import { generateTocken } from "../utils/genereateToken"
 import Teacher from "../model/teacherProfile"
 import admin from "../model/adminProfile"
 
+
+// user signup
 export const userSignup = asyncHandler(async (req: Request, res: Response) => {
     const { name, email, password, role, phone } = req.body
     const isExist = await User.findOne({ email: email})
@@ -57,3 +59,39 @@ export const userSignup = asyncHandler(async (req: Request, res: Response) => {
         throw new Error("Email already exist")
     }
 })
+
+
+
+
+// User login
+export const userLogin = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const { email, password } = req.body;
+
+  const user = await User.findOne<IUser>({ email });
+
+  if (!user) {
+    res.status(401);
+    return next(new Error("User not found"));
+  }
+
+  if (!user.status) {
+    res.status(401);
+    return next(new Error("This account has been blocked"));
+  }
+
+  if (user.password && (await user.matchPassword(password))) {
+    const token = generateTocken(user._id);
+    res.status(200).json({
+      success: true,
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } else {
+    res.status(401);
+    return next(new Error("Invalid credentials"));
+  }
+});
