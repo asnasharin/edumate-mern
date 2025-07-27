@@ -161,4 +161,90 @@ export const updateProgress = expressAsyncHandler(async(req: Request, res: Respo
 )
 
 
-// 
+
+// get all my courses student
+
+export const getAllMycourse = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+
+      const { courseId } = req.body;
+    const studentId = req.user?._id;
+    const course = await Course.findOne(
+      { _id: courseId },
+      { _id: 0, price: 1 }
+    );
+    const amount = course?.price;
+    
+  const enrollments = await Enrollment.aggregate([
+      { $match: { payment_status: "completed", studentId: studentId } },
+      {
+        $lookup: {
+          from: "courses",
+          localField: "courseId",
+          foreignField: "_id",
+          as: "course",
+          pipeline: [
+            {
+              $lookup: {
+                from: "lessons",
+                localField: "_id",
+                foreignField: "courseId",
+                as: "lessons",
+              },
+            },
+            {
+              $lookup: {
+                from: "certificates",
+                localField: "_id",
+                foreignField: "courseId",
+                as: "certificate",
+                pipeline: [{ $match: { userId: studentId } }],
+              },
+            },
+            {
+              $project: {
+                lessons: 1,
+                title: 1,
+                description: 1,
+                coverIMG: 1,
+                price: 1,
+                language: 1,
+                hasCertificate: { $eq: [{ $size: "$certificate" }, 1] },
+              },
+            },
+          ],
+        },
+      },
+      {
+        $unwind: { path: "$course", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $project: {
+          _id: 1,
+          courseId: 1,
+          completed: 1,
+          isComplete: 1,
+          "course.title": 1,
+          "course.description": 1,
+          "course.coverIMG": 1,
+          "course.price": 1,
+          "course.language": 1,
+          "course.hasCertificate": 1,
+          "course.lessons.title": 1,
+          "course.lessons._id": 1,
+          "course.lessons.description": 1,
+          "course.lessons.video": 1,
+          "course.lessons.duration": 1,
+        },
+      },
+    ]);
+    if (enrollments) {
+      res.status(200).json({
+        success: true,
+        enrollments,
+      });
+    } else {
+      res.status(500);
+      next(Error("Internal server Error"));
+    }
+})
+
