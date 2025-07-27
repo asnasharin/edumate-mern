@@ -3,8 +3,9 @@ import expressAsyncHandler from "express-async-handler";
 import Course from "../model/courseModel";
 import Enrollment from "../routes/EnrollmentModel";
 import Student from "../model/studentProfile";
-import { createRazorpayOrder, IRazorder } from "../utils/razorpayOrder";
+import { createRazorpayOrder, IRazorder, verifyRazorpayPayment } from "../utils/razorpayOrder";
 import Payment from "../model/paymentModel";
+import Lesson from "../model/LessonModel";
 
 
 //  create enrollment
@@ -79,3 +80,85 @@ export const createEnrollment = expressAsyncHandler(async (req: Request, res: Re
     });
   }
 );
+
+// verify payment
+
+export const verifyPayment = expressAsyncHandler(async(req, res, next) => {
+  const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body
+
+  const isVerified = verifyRazorpayPayment(
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    );
+
+  if (isVerified) {
+      const payment = await Payment.findOne(
+        { paymentId: razorpay_order_id },
+        { _id: 0, enrollmentId: 1 }
+      );
+
+      if (payment) {
+        const enrollmentId = payment.enrollmentId;
+
+        await Enrollment.findOneAndUpdate(
+          { _id: enrollmentId },
+          { payment_status: "completed" }
+        );
+
+        res.json({
+          success: true,
+          message: "payment verified successfull",
+        });
+      }
+    } else {
+      res.status(500);
+      next(Error("Internal Server Error"));
+    }
+})
+
+
+// update progress
+
+export const updateProgress = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+    const { lessonId, courseId } = req.body;
+    const userId = req.user?._id;
+    const enrollement = await Enrollment.findOne({
+      courseId: courseId,
+      studentId: userId,
+    });
+    const lessons = await Lesson.find({ courseId: courseId });
+    const progress = await Enrollment.findOneAndUpdate(
+      {
+        courseId: courseId,
+        studentId: userId,
+      },
+      {
+        $addToSet: {
+          completed: lessonId,
+        },
+        isComplete:
+          enrollement?.completed?.length === lessons.length - 1 ||
+          enrollement?.completed?.length === lessons.length
+            ? true
+            : false,
+      },
+      {
+        new: true,
+      }
+    );
+    if (progress) {
+      res.status(200).json({
+        success: true,
+        progress: progress.completed,
+        isComplete: progress.isComplete,
+      });
+    } else {
+      res.status(500);
+      next(Error("Internal Server Error"));
+    }
+  }
+)
+
+
+// 
