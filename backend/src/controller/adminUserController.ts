@@ -3,6 +3,7 @@ import expressAsyncHandler from "express-async-handler";
 import Teacher from "../model/teacherProfile";
 import Student from "../model/studentProfile";
 import User from "../model/userModel";
+import Document from "../model/DocumentModel";
 
 
 // get all tutors
@@ -162,3 +163,89 @@ export const unblockUser = expressAsyncHandler(async(req: Request, res: Response
 )
 
 // get single tutor
+
+export const getSingleTutor = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction)=> {
+   const userId = req.params.id;
+    const tutor = await Teacher.findOne({ userID: userId }, { name: 1 });
+    if (tutor) {
+      res.status(200).json({
+        success: true,
+        tutor: tutor,
+      });
+    } else {
+      res.status(404);
+      next(Error("No user found!"));
+    }
+})
+
+// get dashboard details
+
+export const getDashboardDetails = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+  const users = await User.find({
+      status: true,
+      role: { $in: ["STUDENT", "TUTOR"] },
+    });
+    let year = req.query.year as string | number;
+    const monthlyJoinnings = Array(12).fill(0);
+    if (year) {
+      year = parseInt(year as string);
+    } else {
+      year = new Date().getFullYear();
+    }
+    if (users) {
+      users.forEach((user) => {
+        const createdAt = new Date(user.createdAt);
+        const userYear = createdAt.getFullYear();
+        if (userYear === year) {
+          const month = createdAt.getMonth();
+          monthlyJoinnings[month]++;
+        }
+      });
+      const students = await Student.countDocuments();
+      const teachers = await Teacher.countDocuments();
+
+      res.json({
+        monthlyJoinnings,
+        students,
+        teachers,
+      });
+    } else {
+      res.status(500);
+      next(Error("Internal serer Error"));
+    }
+})
+
+// get tutor documents
+
+export const getTutorDocument = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+  const userId = req.params.id;
+    const documents = await Document.find({ userID: userId });
+    if (documents) {
+      res.status(200).json({
+        success: true,
+        documents: documents,
+      });
+    } else {
+      next(Error("something went wrong!"));
+    }
+})
+
+// verify  documents
+
+export const toggleverify = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+  const docId = req.params.id;
+    const document = await Document.findById({ _id: docId });
+    if (document) {
+      document.isVerified = !document.isVerified;
+      const updated = await document.save();
+      if (updated) {
+        res.status(200).json({
+          success: true,
+        });
+      }
+    } else {
+      res.status(404);
+      next(Error("Document not found"));
+    }
+})
+
