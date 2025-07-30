@@ -79,3 +79,9 @@ export const updateTutorProfile = expressAsyncHandler(
     }
   }
 );
+
+// get student posts
+
+export const getStudentPosts = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+  
+})
